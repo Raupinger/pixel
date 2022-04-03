@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PlaceDE Bot
 // @namespace    https://github.com/PlaceDE/Bot
-// @version      14
+// @version      16
 // @description  /r/place bot
 // @author       NoahvdAa, reckter, SgtChrome, nama17
 // @match        https://www.reddit.com/r/place/*
@@ -21,7 +21,7 @@ var placeOrders = [];
 var accessToken;
 var canvas = document.createElement('canvas');
 
-const VERSION = 14
+const VERSION = 16
 var UPDATE_PENDING = false;
 
 const COLOR_MAPPINGS = {
@@ -70,6 +70,9 @@ const COLOR_MAPPINGS = {
 	setInterval(updateOrders, 5 * 60 * 1000); // Update orders elke vijf minuten.
 	await updateOrders();
 	attemptPlace();
+	setInterval(async () => {
+        accessToken = await getAccessToken();
+    }, 30 * 60 * 1000)
 })();
 
 function shuffleWeighted(array) {
@@ -94,7 +97,9 @@ async function attemptPlace() {
 	try {
 		const canvasUrl = await getCurrentImageUrl();
 		ctx = await getCanvasFromUrl(await getCurrentImageUrl('0'), canvas, 0, 0);
-		ctx = await getCanvasFromUrl(await getCurrentImageUrl('1'), canvas, 1000, 0)
+		ctx = await getCanvasFromUrl(await getCurrentImageUrl('1'), canvas, 1000, 0);
+		ctx = await getCanvasFromUrl(await getCurrentImageUrl('2'), canvas, 0, 1000)
+		ctx = await getCanvasFromUrl(await getCurrentImageUrl('3'), canvas, 1000, 1000)
 	} catch (e) {
 		console.warn('Fehler beim Abrufen der Zeichenfläche:', e);
 		Toastify({
@@ -216,7 +221,7 @@ async function place(x, y, color) {
 							'y': y % 1000
 						},
 						'colorIndex': color,
-						'canvasIndex': (x > 999 ? 1 : 0)
+						'canvasIndex': (x > 999 ? (y > 999 ? 3 : 1): (y > 999 ? 2 : 0))
 					}
 				}
 			},
