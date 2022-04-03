@@ -1,7 +1,7 @@
 import WebSocket from 'ws';
 import getPixels from "get-pixels";
 import fetch from 'node-fetch';
-
+import * as fs from 'fs';
 //Logging
 import sig from 'signale';
 const {Signale} = sig;
@@ -111,6 +111,7 @@ async function attemptPlace() {
 
 	let foundPixel = false;
 	let wrongCount = 0;
+	var epoch = 0;
 
 	for (const order of pixelList) {
 		const x = order.x;
@@ -149,6 +150,13 @@ async function attemptPlace() {
 
 	if	(foundPixel) {
 		signale.info( `${wrongCount} sind noch falsch`)
+                epoch = Math.floor(+new Date() / 1000)
+                fs.writeFile('./wrongCount.log', `${wrongCount},${epoch}\n`, { flag: 'a' }, function(err) {
+                        if (err) {
+                                return console.error(err);
+                        }
+
+                });	
 		return
 	}
 
