@@ -4,7 +4,7 @@ ignore_colors = [
 	[0xff, 0x00, 0xf8, 0xff]
 ]
 
-version = 13
+version = 14
 
 [priorities]
 "0" = 0
@@ -21,10 +21,17 @@ priority = 3
 
 [[structure]]
 name = "rwth"
-file = "images/rwth.png"
+file = "images/rwth+fh.png"
 startx = 1333
 starty = 753
-priority = 1
+priority = 2
+
+[[structure]]
+name = "hwst"
+file = "images/hswt_heart.png"
+startx = 1348
+starty = 745
+priority = 2
 
 [[structure]]
 name = "pleadfish"
@@ -44,5 +51,12 @@ priority = 3
 name = "augsburg"
 file = "images/augsburg.png"
 startx = 1333
+starty = 753
+priority = 2
+
+[[structure]]
+name = "slime"
+file = "images/slime.png"
+startx = 1332
 starty = 753
 priority = 2

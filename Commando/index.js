@@ -2,24 +2,33 @@ const express = require('express');
 const fs = require('fs');
 const ws = require('ws');
 const request = require('request');
+const signale = require('signale');
 
 const app = express();
 
-const multer = require('multer');
-const { createCipheriv } = require('crypto');
-
-PIXEL_URL = "https://raw.githubusercontent.com/etonaly/pixel/main/pixel.json"
+RAW_GITHUB_BASE_URL = "https://raw.githubusercontent.com/etonaly/pixel/"
+PIXEL_URL = RAW_GITHUB_BASE_URL + "main/pixel.json"
 IMAGE_URL = "https://github.com/etonaly/pixel/raw/main/output.png"
-const upload = multer({ dest: `${__dirname}/uploads/` });
-
-const VALID_COLORS = ['#BE0039', '#FF4500', '#FFA800', '#FFD635', '#00A368', '#00CC78', '#7EED56', '#00756F', '#009EAA', '#2450A4', '#3690EA', '#51E9F4', '#493AC1', '#6A5CFF', '#811E9F', '#B44AC0', '#FF3881', '#FF99AA', '#6D482F', '#9C6926', '#000000', '#898D90', '#D4D7D9', '#FFFFFF'];
-
+COMMIT_URL = "https://api.github.com/repos/etonaly/pixel/commits?path=output.png"
 var appData = {
     currentJson: {},
-    currentMap: 'blank.png',
-    mapHistory: [
-    ]
-};
+    currentMap: "blank.png",
+    mapHistory: [],
+}
+
+getJson().then(json => {
+    appData.currentJson = json;
+}).catch(err => { signale.error(err) })
+
+getImage().then(image => {
+    appData.currentMap = image;
+}).catch(err => { signale.error(err) });
+
+getHistory();
+
+
+
+
 var brandUsage = {};
 var socketId = 0;
 
@@ -45,61 +54,6 @@ app.get('/api/stats', (req, res) => {
         date: Date.now()
     });
 });
-
-// app.post('/updateorders', upload.single('image'), async (req, res) => {
-//     if (!req.body.reason || !req.body.password || req.body.password != process.env.PASSWORD) {
-//         res.send('Ongeldig wachtwoord!');
-//         fs.unlinkSync(req.file.path);
-//         return;
-//     }
-
-//     if (req.file.mimetype !== 'image/png') {
-//         res.send('Bestand moet een PNG zijn!');
-//         fs.unlinkSync(req.file.path);
-//         return;
-//     }
-
-//     getPixels(req.file.path, 'image/png', function (err, pixels) {
-//         if (err) {
-//             res.send('Fout bij lezen bestand!');
-//             console.log(err);
-//             fs.unlinkSync(req.file.path);
-//             return
-//         }
-
-//         if (pixels.data.length !== 8000000) {
-//             res.send('Bestand moet 2000x1000 zijn!');
-//             fs.unlinkSync(req.file.path);
-//             return;
-//         }
-
-//         for (var i = 0; i < 2000000; i++) {
-//             const r = pixels.data[i * 4];
-//             const g = pixels.data[(i * 4) + 1];
-//             const b = pixels.data[(i * 4) + 2];
-
-//             const hex = rgbToHex(r, g, b);
-//             if (VALID_COLORS.indexOf(hex) === -1) {
-//                 res.send(`Pixel op ${i % 2000}, ${Math.floor(i / 2000)} heeft ongeldige kleur.`);
-//                 fs.unlinkSync(req.file.path);
-//                 return;
-//             }
-//         }
-
-//         const file = `${Date.now()}.png`;
-//         fs.copyFileSync(req.file.path, `${__dirname}/maps/${file}`);
-//         fs.unlinkSync(req.file.path);
-//         appData.currentMap = file;
-//         appData.mapHistory.push({
-//             file,
-//             reason: req.body.reason,
-//             date: Date.now()
-//         })
-//         wsServer.clients.forEach((client) => client.send(JSON.stringify({ type: 'map', data: file, reason: req.body.reason })));
-//         fs.writeFileSync(`${__dirname}/data.json`, JSON.stringify(appData));
-//         res.redirect('/');
-//     });
-// });
 
 wsServer.on('connection', (socket) => {
     socket.id = socketId++;
@@ -130,10 +84,10 @@ wsServer.on('connection', (socket) => {
                 socket.brand = data.brand;
                 break;
             case 'getmap':
-                socket.send(JSON.stringify(appData.currentJson));
+                socket.send(JSON.stringify({ type: 'map', data: appData.currentJson }));
                 break;
             case 'getmapimage':
-                socket.send(JSON.stringify({ type: 'map', data: appData.cuurentMap, reason: null }))
+                socket.send(JSON.stringify({ type: 'mapimage', data: appData.currentMap, reason: null }))
                 break;
             case 'ping':
                 socket.send(JSON.stringify({ type: 'pong' }));
@@ -156,48 +110,138 @@ setInterval(() => {
     }, {});
 }, 1000);
 
-setInterval(() => {
-    request(
-        { uri: PIXEL_URL },
-        function (error, response, body) {
-            if (error) {
-                console.log(error);
-                return;
+function getJson() {
+    return new Promise(function (resolve, reject) {
+        request(
+            { uri: PIXEL_URL },
+            function (error, _response, body) {
+                if (error) {
+                    console.log(error);
+                    reject(error);
+                }
+                try {
+                    resolve(JSON.parse(body));
+                } catch (e) {
+                    console.log(e);
+                    reject(error);
+                }
             }
-            try {
-                newJson = JSON.parse(body);
-                if (JSON.stringify(appData.currentJson) != JSON.stringify(newJson)) {
-                    appData.currentJson = newJson;
-                    wsServer.clients.forEach((client) => client.send(JSON.stringify({ type: 'map', data: newJson, reason: null })));
-                    console.log("[+] New map received!");
+        )
+    })
+}
 
-                    const file = `${Date.now()}.png`;
+function getImage() {
+    return new Promise(function (resolve, reject) {
+        const file = `${Date.now()}.png`;
+        const path = `${__dirname}/maps/${file}`
+        request
+            .get(IMAGE_URL)
+            .on('error', function (err) {
+                console.error(err)
+                reject(err);
+            })
+            .pipe(fs.createWriteStream(path));
+        resolve(file);
+    });
+}
+
+function getLatestCommitMessage() {
+    return new Promise(function (resolve, reject) {
+        request(
+            { uri: COMMIT_URL, headers: { 'User-Agent': "Mozilla/5.0 (Linux; Android 8.0.0; SM-G960F Build/R16NW) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.84 Mobile Safari/537.36" } },
+            function (error, _response, body) {
+                if (error) {
+                    console.log(error);
+                    resolve("Github Update");
+                }
+                try {
+                    const commits = JSON.parse(body);
+                    resolve(commits[0]["commit"]["message"]);
+                } catch (e) {
+                    console.log(e);
+                    resolve("Github Update");
+                }
+            }
+        )
+    });
+}
+function getHistory(limit = 10) {
+    return new Promise(function (resolve, reject) {
+        request(
+            { uri: COMMIT_URL, headers: { 'User-Agent': "Mozilla/5.0 (Linux; Android 8.0.0; SM-G960F Build/R16NW) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.84 Mobile Safari/537.36" } },
+            function (error, _response, body) {
+                if (error) {
+                    resolve(error);
+                }
+                try {
+                    const commits = JSON.parse(body);
+                    resolve(commits);
+                } catch (e) {
+                    resolve(error);
+                }
+            }
+        )
+    }).catch(err => { signale.error(err) }).then(commits => {
+        commits.length = Math.min(commits.length, limit);
+        commits.reverse();
+        for (var commit of commits) {
+            try {
+                console.log(commit);
+                new Promise(function (resolve, reject) {
+                    var commit_image_url = RAW_GITHUB_BASE_URL + commit["sha"] + "/output.png";
+                    var new_message = commit["commit"]["message"];
+                    var new_date = Date.parse(commit["commit"]["author"]["date"]);
+                    const file = `${new_date}.png`;
                     const path = `${__dirname}/maps/${file}`
                     request
-                        .get(IMAGE_URL)
+                        .get(commit_image_url)
                         .on('error', function (err) {
                             console.error(err)
-                            return;
+                            reject(err);
                         })
                         .pipe(fs.createWriteStream(path));
-                    appData.currentMap = file;
+                    resolve([file, new_message, new_date]);
+                }).then( arr => {
                     appData.mapHistory.push({
-                        file,
-                        reason: "Github Update",
-                        date: Date.now()
+                        message: arr[1],
+                        image: arr[0],
+                        date: arr[2]
                     })
-                }
+                }).catch(e => signale.error(e));
             } catch (e) {
-                console.log(e);
-                return;
+                signale.error(e)
             }
         }
-    );
-}, 60000);
 
-function rgbToHex(r, g, b) {
-    return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
+    });
 }
+
+setInterval(() => {
+    getJson().then(newJson => {
+        // got new map
+        if (JSON.stringify(newJson) != JSON.stringify(appData.currentJson)) {
+
+            appData.currentJson = newJson;
+            wsServer.clients.forEach((client) => client.send(JSON.stringify({ type: 'map', data: newJson, reason: null })));
+            console.log("[+] New map received!");
+
+            //get new image
+            getImage().then(file => {
+                if (file) {
+                    appData.currentMap = file;
+                    getLatestCommitMessage().then(message => {
+                        appData.mapHistory.push({
+                            image: file,
+                            message: message,
+                            date: Date.now()
+                        })
+                    }).catch(err => { signale.error(err) })
+                }
+            }).catch(err => { signale.error(err) })
+        }
+    }).catch(err => { signale.error(err) })
+
+}, 60000);
 
 function isAlphaNumeric(str) {
     var code, i, len;
