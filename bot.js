@@ -1,7 +1,7 @@
 import WebSocket from 'ws';
 import getPixels from "get-pixels";
 import fetch from 'node-fetch';
-
+import * as fs from 'fs';
 //Logging
 import sig from 'signale';
 const { Signale } = sig;
@@ -209,8 +209,11 @@ async function attemptPlace(token) {
     const rgbaCanvas = rgbaJoin(map0.data, map1.data);
     const pixelList = getPixelList();
 
-    let foundPixel = false;
-    let wrongCount = 0;
+
+	let foundPixel = false;
+	let wrongCount = 0;
+	var epoch = 0;
+
 
     for (const order of pixelList) {
         const x = order.x;
@@ -246,11 +249,21 @@ async function attemptPlace(token) {
         signale.info('Warten auf Abkühlzeit ' + minutes + ':' + seconds + ' bis ' + new Date(nextAvailablePixelTimestamp).toLocaleTimeString());
         t(token, waitFor);
     }
+                epoch = Math.floor(+new Date() / 1000)
+                fs.writeFile('./wrongCount.log', `${wrongCount},${epoch}\n`, { flag: 'a' }, function(err) {
+                        if (err) {
+                                return console.error(err);
+                        }
 
-    if (foundPixel) {
-        signale.info(`${wrongCount} sind noch falsch`)
-        return
-    }
+                });	
+
+
+	if	(foundPixel) {
+		signale.info( `${wrongCount} sind noch falsch`)
+
+		return
+	}
+
 
     signale.success('Alle bestellten Pixel haben bereits die richtige Farbe!');
     t(token, 2000); // probeer opnieuw in 30sec.
@@ -411,5 +424,7 @@ function getRgbaAt(rgbaCanvas, x, y) {
 }
 
 function rgbToHex(r, g, b) {
-    return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
+
+  return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
+
 }
